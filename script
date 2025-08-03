@@ -1,0 +1,79 @@
+#!/bin/bash
+
+# Function to check SSL certificate validity
+check_ssl_cert() {
+    domain=$1
+    echo "Checking SSL certificate for $domain..."
+
+    # Check SSL certificate using OpenSSL
+    ssl_info=$(openssl s_client -connect "$domain":443 -servername "$domain" </dev/null 2>/dev/null)
+
+    if [[ $? -eq 0 ]]; then
+        echo "SSL certificate found for $domain"
+        
+        # Extract expiration date of the SSL certificate
+        expiry_date=$(echo "$ssl_info" | openssl x509 -noout -dates | grep 'notAfter' | cut -d '=' -f 2)
+        echo "Certificate expiration date: $expiry_date"
+
+        # Check if certificate is expired
+        expiry_seconds=$(date -d "$expiry_date" +%s)
+        current_seconds=$(date +%s)
+        
+        if (( expiry_seconds < current_seconds )); then
+            echo "WARNING: SSL certificate for $domain has expired!"
+        else
+            echo "SSL certificate for $domain is valid."
+        fi
+    else
+        echo "ERROR: Could not fetch SSL certificate for $domain."
+    fi
+}
+
+# Function to validate JSON
+validate_json() {
+    json_file=$1
+    echo "Validating JSON file: $json_file..."
+
+    if [[ -f "$json_file" ]]; then
+        # Check JSON format using jq
+        jq . "$json_file" &>/dev/null
+        
+        if [[ $? -eq 0 ]]; then
+            echo "JSON file $json_file is valid."
+        else
+            echo "ERROR: JSON file $json_file is invalid or malformed."
+        fi
+    else
+        echo "ERROR: File $json_file does not exist."
+    fi
+}
+
+# Function to clean and update certificates
+update_certificates() {
+    echo "Updating system certificates..."
+
+    # Update CA certificates
+    sudo update-ca-certificates --fresh
+    echo "System certificates updated."
+}
+
+# Main Script
+
+echo "Starting SSL/JSON/Certificate Check..."
+
+# SSL certificate check (example domains to check)
+domains=("example.com" "google.com" "github.com")
+for domain in "${domains[@]}"; do
+    check_ssl_cert "$domain"
+done
+
+# Validate JSON files (check a few sample JSON files)
+json_files=("sample1.json" "sample2.json")
+for json_file in "${json_files[@]}"; do
+    validate_json "$json_file"
+done
+
+# Update system certificates
+update_certificates
+
+echo "SSL/JSON/Certificate Check Completed."
